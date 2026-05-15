@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.user import BarberCreate, BarberServiceItem, BarberUpdate, ChangePasswordSchema, UserUpdate
 from app.services.base import BaseService, ServiceError
 from app.services.telegram_service import TelegramService
+from app.utils.imagekit import build_imagekit_webp_url
 
 
 class UserService(BaseService):
@@ -137,7 +138,12 @@ class UserService(BaseService):
         return self.refresh(current_user)
 
     def update_avatar(self, user: User, image: UploadFile) -> User:
-        uploaded_url = self._upload_image(image, folder="/barber-shop/avatars")
+        uploaded_url = self._upload_image(
+            image,
+            folder="/barber-shop/avatars",
+            width=512,
+            quality=82,
+        )
         user.avatar = uploaded_url
         self.db.add(user)
         self.commit()
@@ -157,7 +163,12 @@ class UserService(BaseService):
         if len(current_images) >= self.MAX_GALLERY_IMAGES:
             raise ServiceError(status.HTTP_400_BAD_REQUEST, "Galereyada ko'pi bilan 12 ta rasm bo'lishi mumkin")
 
-        uploaded_url = self._upload_image(image, folder="/barber-shop/gallery")
+        uploaded_url = self._upload_image(
+            image,
+            folder="/barber-shop/gallery",
+            width=1600,
+            quality=82,
+        )
         user.gallery_images = [*current_images, uploaded_url]
         self.db.add(user)
         self.commit()
@@ -282,7 +293,7 @@ class UserService(BaseService):
         }
         return content_map.get(content_type, "jpg")
 
-    def _upload_image(self, image: UploadFile, *, folder: str) -> str:
+    def _upload_image(self, image: UploadFile, *, folder: str, width: int, quality: int = 80) -> str:
         if not image.content_type or not image.content_type.startswith("image/"):
             raise ServiceError(status.HTTP_400_BAD_REQUEST, "Faqat rasm yuklash mumkin")
 
@@ -291,7 +302,8 @@ class UserService(BaseService):
         image.file.seek(0)
         file_bytes = image.file.read()
 
-        return self._upload_to_imagekit(filename, file_bytes, folder=folder)
+        original_url = self._upload_to_imagekit(filename, file_bytes, folder=folder)
+        return build_imagekit_webp_url(original_url, width=width, quality=quality) or original_url
 
     @staticmethod
     def _upload_to_imagekit(filename: str, file_bytes: bytes, *, folder: str) -> str:

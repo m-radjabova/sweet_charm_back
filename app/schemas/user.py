@@ -6,6 +6,7 @@ from pydantic import Field, field_validator, model_validator
 
 from app.models.enums import UserRole
 from app.schemas.common import ORMModel, TimestampedSchema, validate_app_email
+from app.utils.imagekit import build_imagekit_webp_url
 
 
 class UserBase(ORMModel):
@@ -38,10 +39,22 @@ class UserBase(ORMModel):
     def normalize_services(cls, value):
         return value or []
 
+    @field_validator("avatar")
+    @classmethod
+    def optimize_avatar(cls, value: str | None) -> str | None:
+        return build_imagekit_webp_url(value, width=512, quality=82)
+
     @field_validator("gallery_images", mode="before")
     @classmethod
     def normalize_gallery_images(cls, value):
-        return value or []
+        if not value:
+            return []
+        images = [value] if isinstance(value, str) else list(value)
+        return [
+            optimized
+            for image in images
+            if image and (optimized := build_imagekit_webp_url(str(image), width=1600, quality=82))
+        ]
 
 
 class BarberCreate(ORMModel):
