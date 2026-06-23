@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies.auth import get_current_user
+from app.dependencies.roles import require_admin
 from app.models.user import User
+from app.schemas.admin import AdminCreateUser, AdminCustomerListOut, AdminUserOut
 from app.schemas.user import ChangePasswordSchema, UserOut, UserUpdate
+from app.services.admin_service import AdminService
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -50,19 +53,22 @@ def delete_my_avatar(
     return UserService(db).delete_avatar(current_user)
 
 
-@router.post("/me/gallery", response_model=UserOut)
-def upload_my_gallery_image(
-    image: UploadFile = File(...),
+@router.get("", response_model=AdminCustomerListOut)
+def list_customers(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=10, ge=1, le=100),
+    search: str | None = Query(default=None, min_length=1),
+    status: str | None = Query(default=None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
 ):
-    return UserService(db).add_gallery_image(current_user, image)
+    return AdminService(db).list_customers(page=page, page_size=page_size, search=search, status=status)
 
 
-@router.delete("/me/gallery/{image_index}", response_model=UserOut)
-def delete_my_gallery_image(
-    image_index: int,
+@router.post("/admins", response_model=AdminUserOut, status_code=status.HTTP_201_CREATED)
+def create_admin_user(
+    payload: AdminCreateUser,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    _: User = Depends(require_admin),
 ):
-    return UserService(db).delete_gallery_image(current_user, image_index)
+    return AdminService(db).create_admin_user(payload)

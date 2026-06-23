@@ -1,4 +1,3 @@
-import secrets
 from datetime import timedelta
 from uuid import UUID
 
@@ -10,7 +9,7 @@ from app.core.jwt import create_token, decode_token
 from app.core.security import hash_password, verify_password
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.auth import CustomerLoginSchema, CustomerRegisterSchema, LoginSchema
+from app.schemas.auth import LoginSchema, RegisterSchema
 from app.services.base import BaseService, ServiceError
 
 
@@ -24,61 +23,31 @@ class AuthService(BaseService):
         if not user.is_active:
             raise ServiceError(403, "User is inactive")
 
-        tokens = self._build_tokens(user)
-        user.refresh_token_hash = hash_password(tokens["refresh_token"])
-        self.db.add(user)
-        self.commit()
-        return tokens
+        return self._issue_tokens(user)
 
-    def login_customer(self, payload: CustomerLoginSchema) -> dict:
-        normalized_phone = self._normalize_phone_number(payload.phone_number)
-        statement = select(User).where(
-            User.phone_number == normalized_phone,
-            User.role == UserRole.USER,
-        )
-        user = self.db.execute(statement).scalar_one_or_none()
-        if user is None:
-            raise ServiceError(404, "Bu telefon raqami ro'yxatdan o'tmagan")
-        if not user.is_active:
-            raise ServiceError(403, "User is inactive")
+    def register(self, payload: RegisterSchema) -> dict:
+        normalized_phone = self._normalize_phone(payload.phone)
+        normalized_email = payload.email.strip().lower()
 
-        user.location_text = self._normalize_short_text(payload.location_text)
-        user.location_lat, user.location_lng = self._normalize_location(payload.location_lat, payload.location_lng)
-
-        return self._issue_customer_tokens(user)
-
-    def register_customer(self, payload: CustomerRegisterSchema) -> dict:
-        normalized_phone = self._normalize_phone_number(payload.phone_number)
-        statement = select(User).where(User.phone_number == normalized_phone)
-        user = self.db.execute(statement).scalar_one_or_none()
-        if user is not None:
+        phone_statement = select(User).where(User.phone == normalized_phone)
+        existing_phone_user = self.db.execute(phone_statement).scalar_one_or_none()
+        if existing_phone_user is not None:
             raise ServiceError(409, "Bu telefon raqami allaqachon ro'yxatdan o'tgan")
+
+        email_statement = select(User).where(func.lower(User.email) == normalized_email)
+        existing_email_user = self.db.execute(email_statement).scalar_one_or_none()
+        if existing_email_user is not None:
+            raise ServiceError(409, "Bu email allaqachon mavjud")
 
         user = User(
             full_name=payload.full_name.strip(),
-            email=self._build_customer_email(normalized_phone),
-            phone_number=normalized_phone,
-            password_hash=hash_password(secrets.token_urlsafe(24)),
+            email=normalized_email,
+            phone=normalized_phone,
+            password_hash=hash_password(payload.password),
             role=UserRole.USER,
             is_active=True,
-            location_text=self._normalize_short_text(payload.location_text),
         )
-        user.location_lat, user.location_lng = self._normalize_location(payload.location_lat, payload.location_lng)
-
-        return self._issue_customer_tokens(user)
-
-    def login_or_register_customer(self, payload: CustomerRegisterSchema) -> dict:
-        return self.register_customer(payload)
-
-    def _issue_customer_tokens(self, user: User) -> dict:
-        if not user.is_active:
-            raise ServiceError(403, "User is inactive")
-
-        tokens = self._build_tokens(user)
-        user.refresh_token_hash = hash_password(tokens["refresh_token"])
-        self.db.add(user)
-        self.commit()
-        return tokens
+        return self._issue_tokens(user)
 
     def refresh_access_token(self, refresh_token: str) -> dict:
         payload = decode_token(refresh_token)
@@ -119,6 +88,16 @@ class AuthService(BaseService):
         self.db.add(user)
         self.commit()
 
+    def _issue_tokens(self, user: User) -> dict:
+        if not user.is_active:
+            raise ServiceError(403, "User is inactive")
+
+        tokens = self._build_tokens(user)
+        user.refresh_token_hash = hash_password(tokens["refresh_token"])
+        self.db.add(user)
+        self.commit()
+        return tokens
+
     def _build_tokens(self, user: User) -> dict:
         access_token = create_token(
             payload={
@@ -135,33 +114,13 @@ class AuthService(BaseService):
         return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
     @staticmethod
-    def _normalize_phone_number(phone_number: str) -> str:
-        digits = "".join(char for char in phone_number if char.isdigit())
+    def _normalize_phone(phone: str) -> str:
+        digits = "".join(char for char in phone if char.isdigit())
         if digits.startswith("998"):
             digits = digits[3:]
         if len(digits) != 9:
             raise ServiceError(400, "Telefon raqamini +998 XX XXX XX XX formatida kiriting")
         return f"+998{digits}"
-
-    @staticmethod
-    def _build_customer_email(phone_number: str) -> str:
-        digits = "".join(char for char in phone_number if char.isdigit())
-        return f"user-{digits}@customer.local"
-
-    @staticmethod
-    def _normalize_short_text(value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = " ".join(value.strip().split())
-        return normalized or None
-
-    @staticmethod
-    def _normalize_location(lat: float | None, lng: float | None) -> tuple[float | None, float | None]:
-        if lat is None and lng is None:
-            return None, None
-        if lat is None or lng is None:
-            raise ServiceError(400, "Lokatsiya to'liq yuborilishi kerak")
-        return float(lat), float(lng)
 
 
 def get_auth_service(db: Session) -> AuthService:

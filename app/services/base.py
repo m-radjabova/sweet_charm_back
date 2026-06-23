@@ -44,7 +44,7 @@ class BaseService:
         if constraint_name == "users_email_key" or "users_email_key" in raw_message:
             return "Bu email allaqachon mavjud"
 
-        if constraint_name == "users_phone_number_key" or "users_phone_number_key" in raw_message:
+        if constraint_name in {"users_phone_key", "users_phone_number_key"} or "users_phone_key" in raw_message:
             return "Bu telefon raqami allaqachon ro'yxatdan o'tgan"
 
         return "Ma'lumotlar cheklovi buzildi"

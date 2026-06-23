@@ -14,6 +14,4 @@ def require_roles(*allowed_roles: UserRole):
 
 
 require_admin = require_roles(UserRole.ADMIN)
-require_barber = require_roles(UserRole.BARBER)
 require_user = require_roles(UserRole.USER)
-require_admin_or_barber = require_roles(UserRole.ADMIN, UserRole.BARBER)
