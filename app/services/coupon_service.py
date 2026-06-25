@@ -6,10 +6,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.coupon import Coupon
-from app.models.enums import CouponStatus, OrderStatus
+from app.models.enums import CouponStatus, CouponType, OrderStatus
 from app.models.order import Order
-from app.schemas.coupon import CouponCreate
+from app.schemas.coupon import CouponCreate, CouponUpdate
 from app.services.base import BaseService
+from app.services.reward_coupon_service import RewardCouponService
 
 
 class CouponService(BaseService):
@@ -39,7 +40,9 @@ class CouponService(BaseService):
             setattr(coupon, "usage_count", usage_map.get(coupon.code, 0))
         total_active = int(
             self.db.execute(
-                select(func.count()).select_from(Coupon).where(Coupon.status == CouponStatus.ACTIVE)
+                select(func.count()).select_from(Coupon).where(
+                    Coupon.status == CouponStatus.ACTIVE,
+                )
             ).scalar_one()
         )
         return {
@@ -51,9 +54,17 @@ class CouponService(BaseService):
             "total_active": total_active,
         }
 
+    def list_admin_rewards(
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        search: str | None = None,
+    ) -> dict:
+        return RewardCouponService(self.db).list_admin_rewards(page=page, page_size=page_size, search=search)
+
     def create_coupon(self, payload: CouponCreate) -> Coupon:
         existing = self.db.execute(select(Coupon).where(Coupon.code == payload.code)).scalar_one_or_none()
-        if existing:
+        if existing or RewardCouponService(self.db).code_exists(payload.code):
             raise self.bad_request("Coupon code already exists")
 
         coupon = Coupon(
@@ -70,13 +81,48 @@ class CouponService(BaseService):
         self.commit()
         return self.refresh(coupon)
 
+    def update_coupon(self, coupon_id, payload: CouponUpdate) -> Coupon:
+        coupon = self._get_admin_coupon(coupon_id)
+        data = payload.model_dump(exclude_unset=True)
+        next_type = data.get("type", coupon.type)
+        next_value = data.get("value", coupon.value)
+        next_start_date = data.get("start_date", coupon.start_date)
+        next_end_date = data.get("end_date", coupon.end_date)
+
+        if next_start_date > next_end_date:
+            raise self.bad_request("Start date cannot be later than end date")
+        if next_type == CouponType.FREE_SHIPPING:
+            next_value = 0
+            data["value"] = 0
+        elif next_type == CouponType.PERCENTAGE and not (1 <= float(next_value) <= 100):
+            raise self.bad_request("Percentage coupon value must be between 1 and 100")
+        elif next_type == CouponType.FIXED and float(next_value) <= 0:
+            raise self.bad_request("Fixed coupon value must be greater than 0")
+
+        next_code = data.get("code")
+        if next_code and next_code != coupon.code:
+            existing = self.db.execute(select(Coupon).where(Coupon.code == next_code)).scalar_one_or_none()
+            if existing or RewardCouponService(self.db).code_exists(next_code):
+                raise self.bad_request("Coupon code already exists")
+
+        for field, value in data.items():
+            setattr(coupon, field, value)
+
+        self.db.add(coupon)
+        self.commit()
+        return self.refresh(coupon)
+
+    def delete_coupon(self, coupon_id) -> None:
+        coupon = self._get_admin_coupon(coupon_id)
+        self.db.delete(coupon)
+        self.commit()
+
     def list_public_active(self) -> list[Coupon]:
         today = date.today()
         statement = (
             select(Coupon)
             .where(
                 Coupon.status == CouponStatus.ACTIVE,
-                Coupon.assigned_user_id.is_(None),
                 Coupon.start_date <= today,
                 Coupon.end_date >= today,
             )
@@ -113,6 +159,11 @@ class CouponService(BaseService):
         rows = self.db.execute(statement).all()
         return {str(code): int(count) for code, count in rows if code}
 
+    def _get_admin_coupon(self, coupon_id) -> Coupon:
+        coupon = self.db.get(Coupon, coupon_id)
+        if coupon is None:
+            raise self.not_found("Coupon")
+        return coupon
 
 def get_coupon_service(db: Session) -> CouponService:
     return CouponService(db)

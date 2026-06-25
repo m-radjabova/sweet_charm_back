@@ -7,7 +7,6 @@ from app.dependencies.roles import require_admin
 from app.models.user import User
 from app.schemas.admin import AdminCreateUser, AdminCustomerListOut, AdminUserOut
 from app.schemas.user import ChangePasswordSchema, UserOut, UserUpdate
-from app.services.admin_service import AdminService
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -62,7 +61,7 @@ def list_customers(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).list_customers(page=page, page_size=page_size, search=search, status=status)
+    return UserService(db).list_customers(page=page, page_size=page_size, search=search, status=status)
 
 
 @router.post("/admins", response_model=AdminUserOut, status_code=status.HTTP_201_CREATED)
@@ -71,4 +70,4 @@ def create_admin_user(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).create_admin_user(payload)
+    return UserService(db).create_admin_user(payload)

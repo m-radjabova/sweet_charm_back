@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.dependencies.roles import require_admin
 from app.models.user import User
 from app.schemas.admin import AdminOrderListOut, AdminOrderOut, AdminOrderUpdate
-from app.services.admin_service import AdminService
+from app.services.order_service import OrderService
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -21,7 +21,7 @@ def list_orders(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).list_orders(page=page, page_size=page_size, search=search, status=status)
+    return OrderService(db).list_admin(page=page, page_size=page_size, search=search, status=status)
 
 
 @router.patch("/{order_id}", response_model=AdminOrderOut)
@@ -31,4 +31,4 @@ def update_order(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).update_order(order_id, payload)
+    return OrderService(db).update_admin(order_id, payload)

@@ -8,10 +8,17 @@ from app.dependencies.roles import require_admin
 from app.models.user import User
 from app.schemas.admin import AdminDessertCreate, AdminDessertListOut, AdminDessertOut, AdminDessertUpdate
 from app.schemas.dessert import FeaturedDessertOut
-from app.services.admin_service import AdminService
 from app.services.dessert_service import DessertService
 
 router = APIRouter(prefix="/desserts", tags=["Desserts"])
+
+
+@router.get("/best-sellers", response_model=list[FeaturedDessertOut])
+def list_best_seller_desserts(
+    limit: int = Query(default=6, ge=1, le=16),
+    db: Session = Depends(get_db),
+):
+    return DessertService(db).list_best_sellers(limit=limit)
 
 
 @router.get("", response_model=list[FeaturedDessertOut])
@@ -47,6 +54,13 @@ def list_featured_desserts(
     return DessertService(db).list_featured(limit=limit)
 
 
+@router.get("/chef-choice", response_model=FeaturedDessertOut | None)
+def get_chef_choice_dessert(
+    db: Session = Depends(get_db),
+):
+    return DessertService(db).get_chef_choice()
+
+
 @router.get("/manage", response_model=AdminDessertListOut)
 def list_desserts_for_admin(
     page: int = Query(default=1, ge=1),
@@ -57,7 +71,7 @@ def list_desserts_for_admin(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).list_desserts(
+    return DessertService(db).list_admin(
         page=page,
         page_size=page_size,
         search=search,
@@ -72,7 +86,7 @@ def create_dessert(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).create_dessert(payload)
+    return DessertService(db).create_admin(payload)
 
 
 @router.patch("/{dessert_id}", response_model=AdminDessertOut)
@@ -82,7 +96,7 @@ def update_dessert(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).update_dessert(dessert_id, payload)
+    return DessertService(db).update_admin(dessert_id, payload)
 
 
 @router.delete("/{dessert_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -91,4 +105,4 @@ def delete_dessert(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    AdminService(db).delete_dessert(dessert_id)
+    DessertService(db).delete_admin(dessert_id)

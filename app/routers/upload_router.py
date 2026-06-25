@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.dependencies.roles import require_admin
 from app.models.user import User
-from app.services.admin_service import AdminService
+from app.services.dessert_service import DessertService
 
 
 class UploadOut(BaseModel):
@@ -22,5 +22,5 @@ def upload_image(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    url, file_id = AdminService(db).upload_image(image)
+    url, file_id = DessertService(db).upload_image(image)
     return UploadOut(url=url, file_id=file_id)

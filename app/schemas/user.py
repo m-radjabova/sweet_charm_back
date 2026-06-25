@@ -93,3 +93,4 @@ class MyRewardsOut(ORMModel):
 
 class UserOut(TimestampedSchema, UserBase):
     sweet_points: int = 0
+    current_level: str = "bronze"

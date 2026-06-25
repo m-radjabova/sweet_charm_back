@@ -13,7 +13,7 @@ from app.schemas.admin import (
     AdminCategoryOut,
     AdminCategoryUpdate,
 )
-from app.services.admin_service import AdminService
+from app.services.category_service import CategoryService
 
 router = APIRouter(prefix="/categories", tags=["Categories"])
 
@@ -23,7 +23,7 @@ def list_category_options(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).list_category_options()
+    return CategoryService(db).list_options()
 
 
 @router.get("", response_model=AdminCategoryListOut)
@@ -35,7 +35,7 @@ def list_categories(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).list_categories(page=page, page_size=page_size, search=search, status=status)
+    return CategoryService(db).list_admin(page=page, page_size=page_size, search=search, status=status)
 
 
 @router.post("", response_model=AdminCategoryOut, status_code=status.HTTP_201_CREATED)
@@ -44,7 +44,7 @@ def create_category(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).create_category(payload)
+    return CategoryService(db).create(payload)
 
 
 @router.patch("/{category_id}", response_model=AdminCategoryOut)
@@ -54,7 +54,7 @@ def update_category(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).update_category(category_id, payload)
+    return CategoryService(db).update(category_id, payload)
 
 
 @router.post("/{category_id}/image", response_model=AdminCategoryOut)
@@ -64,7 +64,7 @@ def upload_category_image(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).upload_category_image(category_id, image)
+    return CategoryService(db).upload_image(category_id, image)
 
 
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -73,4 +73,4 @@ def delete_category(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    AdminService(db).delete_category(category_id)
+    CategoryService(db).delete(category_id)

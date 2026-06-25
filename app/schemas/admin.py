@@ -42,6 +42,15 @@ class AdminRecentOrderItem(ORMModel):
     created_at: datetime
 
 
+class AdminLowStockItem(ORMModel):
+    id: UUID
+    name: str
+    slug: str
+    stock: int
+    status: DessertStatus
+    category_name: str | None = None
+
+
 class AdminHeatmapCell(ORMModel):
     time: str
     value: int
@@ -57,6 +66,7 @@ class AdminDashboardOut(ORMModel):
     total_orders: int
     pending_orders: int
     delivered_orders: int
+    low_stock_count: int
     pending_reviews: int
     approved_reviews: int
     total_desserts: int
@@ -75,6 +85,7 @@ class AdminDashboardOut(ORMModel):
     orders_by_time: list[AdminHeatmapRow]
     top_desserts: list[AdminTopDessertItem]
     recent_orders: list[AdminRecentOrderItem]
+    low_stock_items: list[AdminLowStockItem]
 
 
 class AdminCategoryBase(ORMModel):
@@ -150,6 +161,7 @@ class AdminDessertBase(ORMModel):
     status: DessertStatus = DessertStatus.ACTIVE
     is_featured: bool = False
     is_best_seller: bool = False
+    is_chef_choice: bool = False
     image_url: str | None = Field(default=None, max_length=500)
     image_urls: list[str] = Field(default_factory=list)
 
@@ -184,6 +196,7 @@ class AdminDessertUpdate(ORMModel):
     status: DessertStatus | None = None
     is_featured: bool | None = None
     is_best_seller: bool | None = None
+    is_chef_choice: bool | None = None
     image_url: str | None = Field(default=None, max_length=500)
     image_urls: list[str] | None = None
 
@@ -216,6 +229,7 @@ class AdminDessertOut(ORMModel):
     status: DessertStatus
     is_featured: bool
     is_best_seller: bool
+    is_chef_choice: bool
     rating_avg: Decimal
     reviews_count: int
     image_url: str | None = None
@@ -238,6 +252,63 @@ class AdminDessertListOut(ORMModel):
     page_size: int
     total_pages: int
     stats: AdminDessertStats
+
+
+class AdminGalleryImageBase(ORMModel):
+    title: str | None = Field(default=None, max_length=120)
+    image_url: str = Field(min_length=1, max_length=500)
+    sort_order: int = Field(default=0, ge=0)
+    is_active: bool = True
+
+    @field_validator("title", "image_url", mode="before")
+    @classmethod
+    def trim_gallery_text(cls, value: str | None):
+        if value is None:
+            return None
+        return str(value).strip()
+
+
+class AdminGalleryImageCreate(AdminGalleryImageBase):
+    pass
+
+
+class AdminGalleryImageUpdate(ORMModel):
+    title: str | None = Field(default=None, max_length=120)
+    image_url: str | None = Field(default=None, max_length=500)
+    sort_order: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+
+    @field_validator("title", "image_url", mode="before")
+    @classmethod
+    def trim_gallery_update_text(cls, value: str | None):
+        if value is None:
+            return None
+        return str(value).strip()
+
+
+class AdminGalleryImageOut(ORMModel):
+    id: UUID
+    title: str | None = None
+    image_url: str
+    sort_order: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminGalleryImageStats(ORMModel):
+    total: int
+    active: int
+    hidden: int
+
+
+class AdminGalleryImageListOut(ORMModel):
+    items: list[AdminGalleryImageOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    stats: AdminGalleryImageStats
 
 
 class AdminOrderItemOut(ORMModel):

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from pydantic import Field
 
+from app.models.enums import DessertStatus
 from app.schemas.common import ORMModel
 
 
@@ -18,3 +19,6 @@ class FeaturedDessertOut(ORMModel):
     rating_avg: float = 0
     reviews_count: int = 0
     category_name: str | None = Field(default=None)
+    stock: int = 0
+    status: DessertStatus = DessertStatus.ACTIVE
+    is_chef_choice: bool = False

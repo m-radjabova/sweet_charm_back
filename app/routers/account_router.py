@@ -7,8 +7,8 @@ from app.core.database import get_db
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 from app.schemas.address import AddressCreate, AddressOut, AddressUpdate
-from app.schemas.coupon import PublicCouponOut
 from app.schemas.order import OrderCreate, OrderOut
+from app.schemas.reward_coupon import AccountCouponOut
 from app.schemas.user import MyRewardsOut
 from app.services.account_service import AccountService
 
@@ -31,7 +31,7 @@ def my_rewards(
     return AccountService(db).get_my_rewards(current_user)
 
 
-@router.get("/coupons", response_model=list[PublicCouponOut])
+@router.get("/coupons", response_model=list[AccountCouponOut])
 def my_coupons(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

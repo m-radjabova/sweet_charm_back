@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
 import requests
 from fastapi import UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.security import hash_password, verify_password
 from app.models.enums import UserRole
 from app.models.user import User
+from app.schemas.admin import AdminCreateUser
 from app.schemas.user import AdminCreate, ChangePasswordSchema, UserUpdate
 from app.services.base import BaseService, ServiceError
 from app.utils.imagekit import build_imagekit_webp_url
@@ -41,6 +44,14 @@ class UserService(BaseService):
         return self.db.execute(statement).scalar_one_or_none()
 
     def create_admin(self, payload: AdminCreate) -> User:
+        return self._create_user(
+            full_name=payload.full_name,
+            email=payload.email,
+            password=payload.password,
+            role=UserRole.ADMIN,
+        )
+
+    def create_admin_user(self, payload: AdminCreateUser) -> User:
         return self._create_user(
             full_name=payload.full_name,
             email=payload.email,
@@ -102,6 +113,55 @@ class UserService(BaseService):
             self._delete_from_imagekit(previous_file_id)
         return self.refresh(user)
 
+    def list_customers(
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        search: str | None = None,
+        status: str | None = None,
+    ) -> dict:
+        filters = [User.role == UserRole.USER]
+        if status == "active":
+            filters.append(User.is_active.is_(True))
+        elif status == "inactive":
+            filters.append(User.is_active.is_(False))
+        if search:
+            query = f"%{search.strip().lower()}%"
+            filters.append(
+                func.lower(
+                    func.concat(
+                        User.full_name,
+                        " ",
+                        User.email,
+                        " ",
+                        func.coalesce(User.phone, ""),
+                    )
+                ).like(query)
+            )
+
+        base_statement = (
+            select(User)
+            .options(selectinload(User.orders), selectinload(User.reviews))
+            .where(*filters)
+        )
+        total = self._count_from_statement(base_statement)
+        users = list(
+            self.db.execute(
+                base_statement.order_by(User.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            ).scalars().all()
+        )
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        return {
+            "items": [self._serialize_customer(user) for user in users],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "stats": self._build_customer_stats(),
+        }
+
     def _create_user(self, full_name: str, email: str, password: str, role: UserRole) -> User:
         normalized_email = email.strip().lower()
         self._ensure_email_available(normalized_email)
@@ -115,6 +175,42 @@ class UserService(BaseService):
         self.db.add(user)
         self.commit()
         return self.refresh(user)
+
+    def _serialize_customer(self, user: User) -> dict:
+        return {
+            "id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "phone": user.phone,
+            "avatar": user.avatar,
+            "role": user.role,
+            "is_active": user.is_active,
+            "birthday": user.birthday,
+            "bio": user.bio,
+            "orders_count": len(user.orders),
+            "reviews_count": len(user.reviews),
+            "created_at": user.created_at,
+        }
+
+    def _build_customer_stats(self) -> dict:
+        users = list(
+            self.db.execute(select(User.is_active, User.created_at).where(User.role == UserRole.USER)).all()
+        )
+        total = len(users)
+        active = sum(1 for is_active, _ in users if is_active)
+        now = datetime.now(UTC)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        new_this_month = sum(1 for _, created_at in users if created_at >= month_start)
+        return {
+            "total": total,
+            "active": active,
+            "inactive": total - active,
+            "new_this_month": new_this_month,
+        }
+
+    def _count_from_statement(self, statement) -> int:
+        count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
+        return int(self.db.execute(count_statement).scalar_one())
 
     def _ensure_email_available(self, email: str, exclude_user_id=None) -> None:
         existing_user = self.get_by_email(email)

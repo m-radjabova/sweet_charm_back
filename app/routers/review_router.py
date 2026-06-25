@@ -9,7 +9,6 @@ from app.dependencies.roles import require_admin
 from app.models.user import User
 from app.schemas.admin import AdminReviewListOut, AdminReviewOut, AdminReviewUpdate
 from app.schemas.review import DessertReviewOut, FeaturedReviewOut, ReviewCreate
-from app.services.admin_service import AdminService
 from app.services.review_service import ReviewService
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
@@ -51,7 +50,7 @@ def list_reviews(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    return AdminService(db).list_reviews(page=page, page_size=page_size, search=search, state=state)
+    return ReviewService(db).list_admin(page=page, page_size=page_size, search=search, state=state)
 
 
 @router.patch("/{review_id}", response_model=AdminReviewOut)
@@ -61,20 +60,7 @@ def update_review(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    review = AdminService(db).update_review(review_id, payload.is_approved)
-    return {
-        "id": review.id,
-        "dessert_id": review.dessert_id,
-        "dessert_name": review.dessert.name if review.dessert else None,
-        "user_id": review.user_id,
-        "customer_name": review.user.full_name if review.user else "Customer",
-        "customer_email": review.user.email if review.user else None,
-        "avatar": review.user.avatar if review.user else None,
-        "rating": review.rating,
-        "text": review.text,
-        "is_approved": review.is_approved,
-        "created_at": review.created_at,
-    }
+    return ReviewService(db).update_admin(review_id, payload.is_approved)
 
 
 @router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -83,4 +69,4 @@ def delete_review(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    AdminService(db).delete_review(review_id)
+    ReviewService(db).delete_admin(review_id)

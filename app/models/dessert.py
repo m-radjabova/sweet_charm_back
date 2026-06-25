@@ -43,6 +43,7 @@ class Dessert(Base):
     )
     is_featured: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     is_best_seller: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_chef_choice: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     rating_avg: Mapped[Decimal] = mapped_column(Numeric(3, 2), nullable=False, default=0, server_default="0")
     reviews_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
