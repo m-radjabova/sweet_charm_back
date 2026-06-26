@@ -36,6 +36,7 @@ class Settings(BaseModel):
             "http://localhost:5173",
             "http://localhost:8081",
             "http://127.0.0.1:8081",
+            "https://sweet-charm.vercel.app"
         ],
     )
     IMAGEKIT_PUBLIC_KEY: str = os.getenv("IMAGEKIT_PUBLIC_KEY", "").strip()
